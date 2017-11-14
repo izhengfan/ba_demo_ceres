@@ -11,6 +11,22 @@ using namespace Eigen;
 using namespace std;
 
 
+class SnavelyReprojectionError
+{
+public:
+    SnavelyReprojectionError(double observation_x, double observation_y): _observation_x(observation_x), _observation_y(observation_y) {}
+
+    template<typename T>
+    bool operator ()(const T* const camera, const T* const point, T* residuals) const
+    {
+        
+    }
+
+private:
+    double _observation_x;
+    double _observation_y;
+};
+
 class Sample {
 public:
   static int uniform(int from, int to);
