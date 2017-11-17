@@ -1,4 +1,5 @@
 #include <Eigen/StdVector>
+#include <Eigen/Geometry>
 #include <iostream>
 #include <stdint.h>
 
@@ -8,16 +9,41 @@
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
 
+#include "se3.hpp"
+
 using namespace Eigen;
 using namespace std;
 
-typedef Eigen::Matrix<double, 6, 1> Vector6d;
+class CameraParameters
+{
+protected:
+    double f;
+    double cx;
+    double cy;
+public:
+    CameraParameters(double f_, double cx_, double cy_)
+        : f(f_), cx(cx_), cy(cy_) {}
+
+    Vector2d cam_map(const Vector3d& p)
+    {
+        Vector2d z;
+        z[0] = f * p[0] / p[2] + cx;
+        z[1] = f * p[1] / p[2] + cy;
+        return z;
+    }
+};
 
 class ReprojectionErrorSE3XYZ: public ceres::SizedCostFunction<2, 7, 3>
 {
 public:
-    ReprojectionErrorSE3XYZ(double observation_x, double observation_y)
-        : _observation_x(observation_x), _observation_y(observation_y) {}
+    ReprojectionErrorSE3XYZ(double f_,
+                            double cx_,
+                            double cy_,
+                            double observation_x,
+                            double observation_y)
+        : f(f_), cx(cx_), cy(cy_),
+          _observation_x(observation_x),
+          _observation_y(observation_y){}
 
     virtual bool Evaluate(double const* const* parameters,
                           double* residuals,
@@ -71,7 +97,7 @@ bool ReprojectionErrorSE3XYZ::Evaluate(const double * const *parameters, double 
     {
         Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor> > J_se3(jacobians[0]);
         Eigen::Map<Eigen::Matrix<double, 2, 3, Eigen::RowMajor> > J_point(jacobians[1]);
-        J_se3.Zero();
+        J_se3.setZero();
         J_se3.block<2,3>(0,0) = - J_cam * skew(p);
         J_se3.block<2,3>(0,3) = J_cam;
         J_point = J_cam * q.toRotationMatrix();
@@ -79,7 +105,6 @@ bool ReprojectionErrorSE3XYZ::Evaluate(const double * const *parameters, double 
 
     return true;
 }
-
 
 class SE3Parameterization : public ceres::LocalParameterization {
 public:
@@ -93,6 +118,30 @@ public:
     virtual int GlobalSize() const { return 7; }
     virtual int LocalSize() const { return 6; }
 };
+
+bool SE3Parameterization::Plus(const double *x, const double *delta, double *x_plus_delta) const
+{
+    Eigen::Map<const Eigen::Quaterniond> quaterd(x);
+    Eigen::Map<const Eigen::Vector3d> trans(x + 4);
+
+    SE3 se3_delta = SE3::exp(Vector6d(delta));
+
+    Eigen::Map<Eigen::Quaterniond> quaterd_plus(x_plus_delta);
+    Eigen::Map<Eigen::Vector3d> trans_plus(x_plus_delta + 4);
+
+    quaterd_plus = se3_delta.rotation() * quaterd;
+    trans_plus = se3_delta.rotation() * trans + se3_delta.translation();
+
+    return true;
+}
+
+bool SE3Parameterization::ComputeJacobian(const double *x, double *jacobian) const
+{
+    Eigen::Map<Eigen::Matrix<double, 7, 6, Eigen::RowMajor> > J(jacobian);
+    J.setZero();
+    J.block<6,6>(0,0).setIdentity();
+    return true;
+}
 
 class Sample
 {
@@ -200,6 +249,8 @@ int main(int argc, const char *argv[])
     //     g2o::make_unique<g2o::BlockSolver_6_3>(std::move(linearSolver)));
     // optimizer.setAlgorithm(solver);
 
+    ceres::Problem problem;
+
     vector<Vector3d> true_points;
     for (size_t i = 0; i < 500; ++i)
     {
@@ -208,10 +259,14 @@ int main(int argc, const char *argv[])
                                        Sample::uniform() + 3));
     }
 
+    //Vector2d principal_point(320., 240.);
     double focal_length = 1000.;
-    Vector2d principal_point(320., 240.);
+    double cx = 320.;
+    double cy = 240.;
+    CameraParameters cam(focal_length, cx, cy);
 
-    vector<Vector6d, aligned_allocator<Vector6d>> true_poses;
+    vector<Vector7d, aligned_allocator<Vector7d>> true_poses;
+
 
     int vertex_id = 0;
     for (size_t i = 0; i < 15; ++i)
@@ -222,7 +277,8 @@ int main(int argc, const char *argv[])
         q.setIdentity();
         // g2o::SE3Quat pose(q, trans);
         // g2o::VertexSE3Expmap *v_se3 = new g2o::VertexSE3Expmap();
-        Vector6d pose = Vector6d::Zero();
+        Vector7d pose = Vector7d::Zero();
+        pose.head<4>() = Eigen::Vector4d(q.coeffs());
         pose.tail<3>() = trans;
 
         // v_se3->setId(vertex_id);
@@ -243,18 +299,26 @@ int main(int argc, const char *argv[])
     unordered_map<int, int> pointid_2_trueid;
     unordered_set<int> inliers;
 
+
     for (size_t i = 0; i < true_points.size(); ++i)
     {
-        g2o::VertexSBAPointXYZ *v_p = new g2o::VertexSBAPointXYZ();
-        v_p->setId(point_id);
-        v_p->setMarginalized(true);
-        v_p->setEstimate(true_points.at(i) + Vector3d(Sample::gaussian(1),
-                                                      Sample::gaussian(1),
-                                                      Sample::gaussian(1)));
+        Vector3d noise_point_i = true_points.at(i) + Vector3d(Sample::gaussian(1),
+                                                              Sample::gaussian(1),
+                                                              Sample::gaussian(1));
+
+        //g2o::VertexSBAPointXYZ *v_p = new g2o::VertexSBAPointXYZ();
+        //v_p->setId(point_id);
+        //v_p->setMarginalized(true);
+        //v_p->setEstimate();
+
         int num_obs = 0;
         for (size_t j = 0; j < true_poses.size(); ++j)
         {
-            Vector2d z = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
+            //Vector2d z = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
+            SE3 true_pose;
+            true_pose.fromVector(true_poses.at(j));
+            Vector3d point_cam = true_pose.map(true_points.at(i));
+            Vector2d z = cam.cam_map(point_cam);
             if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
             {
                 ++num_obs;
@@ -262,11 +326,18 @@ int main(int argc, const char *argv[])
         }
         if (num_obs >= 2)
         {
-            optimizer.addVertex(v_p);
+            //optimizer.addVertex(v_p);
+            double* noise_pt_i_coeffs = noise_point_i.data();
+            problem.AddParameterBlock(noise_pt_i_coeffs, 3);
+
             bool inlier = true;
             for (size_t j = 0; j < true_poses.size(); ++j)
             {
-                Vector2d z = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
+                //Vector2d z = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
+                SE3 true_pose;
+                true_pose.fromVector(true_poses.at(j));
+                Vector3d point_cam = true_pose.map(true_points.at(i));
+                Vector2d z = cam.cam_map(point_cam);
 
                 if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
                 {
