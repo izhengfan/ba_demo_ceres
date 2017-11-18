@@ -65,6 +65,8 @@ public:
           _observation_x(observation_x),
           _observation_y(observation_y){}
 
+    virtual ~ReprojectionErrorSE3XYZ() {}
+
     virtual bool Evaluate(double const* const* parameters,
                           double* residuals,
                           double** jacobians) const;
