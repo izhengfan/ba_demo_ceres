@@ -3,37 +3,53 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#include <ceres/rotation.h>
 
 
 typedef Eigen::Matrix<double, 6, 1, Eigen::ColMajor> Vector6d;
 typedef Eigen::Matrix<double, 7, 1, Eigen::ColMajor> Vector7d;
 
+Eigen::Matrix3d skew(const Eigen::Vector3d&v)
+{
+    Eigen::Matrix3d m;
+    m.fill(0.);
+    m(0,1)  = -v(2);
+    m(0,2)  =  v(1);
+    m(1,2)  = -v(0);
+    m(1,0)  =  v(2);
+    m(2,0) = -v(1);
+    m(2,1) = v(0);
+    return m;
+}
+
+Eigen::Vector3d deltaR(const Eigen::Matrix3d& R)
+{
+    Eigen::Vector3d v;
+    v(0)=R(2,1)-R(1,2);
+    v(1)=R(0,2)-R(2,0);
+    v(2)=R(1,0)-R(0,1);
+    return v;
+}
+
+
+Eigen::Vector3d toAngleAxis(const Eigen::Quaterniond& quaterd)
+{
+    double q[4] = {quaterd.w(), quaterd.x(), quaterd.y(), quaterd.z() };
+    double a[3];
+    ceres::QuaternionToAngleAxis(q, a);
+    return Eigen::Vector3d(a);
+}
+
+Eigen::Quaterniond toQuaterniond(const Eigen::Vector3d& v3d)
+{
+    double q[4];
+    ceres::AngleAxisToQuaternion(v3d.data(), q);
+    return Eigen::Quaterniond(q[0], q[1], q[2], q[3]);
+}
 
 class SE3 {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-
-    static Eigen::Matrix3d skew(const Eigen::Vector3d&v)
-    {
-        Eigen::Matrix3d m;
-        m.fill(0.);
-        m(0,1)  = -v(2);
-        m(0,2)  =  v(1);
-        m(1,2)  = -v(0);
-        m(1,0)  =  v(2);
-        m(2,0) = -v(1);
-        m(2,1) = v(0);
-        return m;
-    }
-
-    static Eigen::Vector3d deltaR(const Eigen::Matrix3d& R)
-    {
-        Eigen::Vector3d v;
-        v(0)=R(2,1)-R(1,2);
-        v(1)=R(0,2)-R(2,0);
-        v(2)=R(1,0)-R(0,1);
-        return v;
-    }
 
 protected:
 

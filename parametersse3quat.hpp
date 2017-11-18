@@ -83,7 +83,7 @@ bool ReprojectionErrorSE3XYZ::Evaluate(const double * const *parameters, double 
         {
             Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor> > J_se3(jacobians[0]);
             J_se3.setZero();
-            J_se3.block<2,3>(0,0) = - J_cam * SE3::skew(p);
+            J_se3.block<2,3>(0,0) = - J_cam * skew(p);
             J_se3.block<2,3>(0,3) = J_cam;
         }
         if(jacobians[1] != NULL)

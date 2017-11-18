@@ -11,28 +11,10 @@
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
 
-#include "sophus/se3.hpp"
-
-
 #include "se3.hpp"
 
 using namespace std;
 using namespace Eigen;
-
-Vector3d toAngleAxis(const Quaterniond& quaterd)
-{
-    double q[4] = {quaterd.w(), quaterd.x(), quaterd.y(), quaterd.z() };
-    double a[3];
-    ceres::QuaternionToAngleAxis(q, a);
-    return Vector3d(a);
-}
-
-Quaterniond toQuaterniond(const Vector3d& v3d)
-{
-    double q[4];
-    ceres::AngleAxisToQuaternion(v3d.data(), q);
-    return Quaterniond(q[0], q[1], q[2], q[3]);
-}
 
 class CameraParameters
 {
@@ -102,7 +84,7 @@ bool ReprojectionErrorSE3XYZ::Evaluate(double const* const *parameters, double *
         if(jacobians[0] != NULL)
         {
             Eigen::Map<Matrix<double, 2, 6, RowMajor> > J_se3(jacobians[0]);
-            J_se3.block<2,3>(0,0) = - J_cam * SE3::skew(Vector3d(p));
+            J_se3.block<2,3>(0,0) = - J_cam * skew(Vector3d(p));
             J_se3.block<2,3>(0,3) = J_cam;
         }
         if(jacobians[1] != NULL)
