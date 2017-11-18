@@ -173,8 +173,8 @@ int main(int argc, const char *argv[])
 
 
             Matrix2d information = Matrix2d::Identity();
-            std::shared_ptr<Camera> cam = std::make_shared<Camera>(focal_length, focal_length, cx, cy);
-            ceres::CostFunction* costFunc = new reprojectErr(Vector3d(states.point(i)), Vector2d(z), information, cam);
+            std::shared_ptr<Camera> camera = std::make_shared<Camera>(focal_length, focal_length, cx, cy);
+            ceres::CostFunction* costFunc = new reprojectErr(Vector3d(states.point(i)), Vector2d(z), information, camera);
 
 //            ceres::CostFunction* costFunc = new ReprojectionErrorSE3XYZ(focal_length, cx, cy, z[0], z[1]);
             problem.AddResidualBlock(costFunc, NULL, states.pose(j), states.point(i));
