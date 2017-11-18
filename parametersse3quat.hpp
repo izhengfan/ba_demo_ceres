@@ -76,31 +76,21 @@ bool ReprojectionErrorSE3XYZ::Evaluate(const double * const *parameters, double 
     double f_by_z = f / p[2];
     J_cam << f_by_z, 0, - f_by_z * p[0] / p[2],
             0, f_by_z, - f_by_z * p[1] / p[2];
-    cout << "Evaluate!" << endl;
 
-    if(jacobians == NULL)
+    if(jacobians != NULL)
     {
-        cout << endl;
-    }
-
-    if(jacobians[0] == NULL)
-    {
-        cout << endl;
-    }
-    if(jacobians[1] == NULL)
-    {
-        cout << endl;
-    }
-
-    if(jacobians != NULL && jacobians[0] != NULL && jacobians[1] != NULL)
-    {
-        cout << "Calculate J!" << endl;
-        Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor> > J_se3(jacobians[0]);
-        Eigen::Map<Eigen::Matrix<double, 2, 3, Eigen::RowMajor> > J_point(jacobians[1]);
-        J_se3.setZero();
-        J_se3.block<2,3>(0,0) = - J_cam * SE3::skew(p);
-        J_se3.block<2,3>(0,3) = J_cam;
-        J_point = J_cam * quaterd.toRotationMatrix();
+        if(jacobians[0] != NULL)
+        {
+            Eigen::Map<Eigen::Matrix<double, 2, 7, Eigen::RowMajor> > J_se3(jacobians[0]);
+            J_se3.setZero();
+            J_se3.block<2,3>(0,0) = - J_cam * SE3::skew(p);
+            J_se3.block<2,3>(0,3) = J_cam;
+        }
+        if(jacobians[1] != NULL)
+        {
+            Eigen::Map<Eigen::Matrix<double, 2, 3, Eigen::RowMajor> > J_point(jacobians[1]);
+            J_point = J_cam * quaterd.toRotationMatrix();
+        }
     }
 
     return true;

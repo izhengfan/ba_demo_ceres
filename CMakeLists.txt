@@ -17,8 +17,5 @@ target_link_libraries(${PROJECT_NAME} ${CERES_LIBRARIES} )
 add_executable(ba_6d ba_demo_6d.cpp)
 target_link_libraries(ba_6d ${CERES_LIBRARIES})
 
-add_executable(ba_sophus ba_demo_sophus.cpp)
-target_link_libraries(ba_sophus ${CERES_LIBRARIES})
-
 add_executable(curve_fit curve_fit.cc)
 target_link_libraries(curve_fit ${CERES_LIBRARIES} ${OpenCV_LIBS})

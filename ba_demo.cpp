@@ -95,11 +95,14 @@ int main(int argc, const char *argv[])
 
     ceres::Problem problem;
 
-    PosePointParametersBlock states(15, 500);
-    PosePointParametersBlock true_states(15, 500);
+    int pose_num = 15;
+    int point_num = 300;
+
+    PosePointParametersBlock states(pose_num, point_num);
+    PosePointParametersBlock true_states(pose_num, point_num);
 
     //vector<Vector3d> true_points;
-    for (int i = 0; i < 500; ++i)
+    for (int i = 0; i < point_num; ++i)
     {
         Eigen::Map<Vector3d> true_pt(true_states.point(i));
         true_pt = Vector3d((Sample::uniform() - 0.5) * 3,
@@ -113,7 +116,7 @@ int main(int argc, const char *argv[])
     CameraParameters cam(focal_length, cx, cy);
 
     int vertex_id = 0;
-    for (int i = 0; i < 15; ++i)
+    for (int i = 0; i < pose_num; ++i)
     {
         Vector3d trans(i * 0.04 - 1., 0, 0);
 
@@ -135,14 +138,13 @@ int main(int argc, const char *argv[])
         vertex_id++;
     }
     int point_id = vertex_id;
-    int point_num = 0;
     double sum_diff2 = 0;
 
     cout << endl;
     unordered_map<int, int> pointid_2_trueid;
     unordered_set<int> inliers;
 
-    for (int i = 0; i < 500; ++i)
+    for (int i = 0; i < point_num; ++i)
     {
         Eigen::Map<Vector3d> true_point_i(true_states.point(i));
         Eigen::Map<Vector3d> noise_point_i(states.point(i));
@@ -150,14 +152,15 @@ int main(int argc, const char *argv[])
                                                 Sample::gaussian(1),
                                                 Sample::gaussian(1));
 
+        Vector2d z;
+        SE3 true_pose_se3;
+
         int num_obs = 0;
-        for (int j = 0; j < 15; ++j)
+        for (int j = 0; j < pose_num; ++j)
         {
-            //Vector2d z = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
-            SE3 true_pose_se3;
             true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
             Vector3d point_cam = true_pose_se3.map(true_point_i);
-            Vector2d z = cam.cam_map(point_cam);
+            z = cam.cam_map(point_cam);
             if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
             {
                 ++num_obs;
@@ -168,22 +171,14 @@ int main(int argc, const char *argv[])
             problem.AddParameterBlock(states.point(i), 3);
 
             bool inlier = true;
-            for (int j = 0; j < 15; ++j)
+            for (int j = 0; j < pose_num; ++j)
             {
-                SE3 true_pose_se3;
                 true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
                 Vector3d point_cam = true_pose_se3.map(true_point_i);
-                Vector2d z = cam.cam_map(point_cam);
+                z = cam.cam_map(point_cam);
 
                 if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
                 {
-                    double sam = Sample::uniform();
-                    if (sam < OUTLIER_RATIO)
-                    {
-                        z = Vector2d(Sample::uniform(0, 640),
-                                     Sample::uniform(0, 480));
-                        inlier = false;
-                    }
                     z += Vector2d(Sample::gaussian(PIXEL_NOISE),
                                   Sample::gaussian(PIXEL_NOISE));
 
@@ -195,20 +190,19 @@ int main(int argc, const char *argv[])
             if (inlier)
             {
                 inliers.insert(point_id);
-                //Vector3d diff = v_p->estimate() - true_points[i];
                 Vector3d diff = noise_point_i - true_point_i;
 
                 sum_diff2 += diff.dot(diff);
             }
             pointid_2_trueid.insert(make_pair(point_id, i));
             ++point_id;
-            ++point_num;
         }
     }
     cout << endl;
     ceres::Solver::Options options;
     options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
     options.minimizer_progress_to_stdout = true;
+    options.max_num_iterations = 50;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.BriefReport() << "\n";

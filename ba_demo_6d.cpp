@@ -98,11 +98,14 @@ int main(int argc, const char *argv[])
 
     ceres::Problem problem;
 
-    PosePointParametersBlock states(15, 50);
-    PosePointParametersBlock true_states(15, 50);
+    int pose_num = 15;
+    int point_num = 300;
+
+    PosePointParametersBlock states(pose_num, point_num);
+    PosePointParametersBlock true_states(pose_num, point_num);
 
     //vector<Vector3d> true_points;
-    for (int i = 0; i < 50; ++i)
+    for (int i = 0; i < point_num; ++i)
     {
         Eigen::Map<Vector3d> true_pt(true_states.point(i));
         true_pt = Vector3d((Sample::uniform() - 0.5) * 3,
@@ -116,7 +119,7 @@ int main(int argc, const char *argv[])
     CameraParameters cam(focal_length, cx, cy);
 
     int vertex_id = 0;
-    for (int i = 0; i < 15; ++i)
+    for (int i = 0; i < pose_num; ++i)
     {
         Vector3d trans(i * 0.04 - 1., 0, 0);
 
@@ -138,14 +141,13 @@ int main(int argc, const char *argv[])
         vertex_id++;
     }
     int point_id = vertex_id;
-    int point_num = 0;
     double sum_diff2 = 0;
 
     cout << endl;
     unordered_map<int, int> pointid_2_trueid;
     unordered_set<int> inliers;
 
-    for (int i = 0; i < 50; ++i)
+    for (int i = 0; i < point_num; ++i)
     {
         Eigen::Map<Vector3d> true_point_i(true_states.point(i));
         Eigen::Map<Vector3d> noise_point_i(states.point(i));
@@ -153,48 +155,60 @@ int main(int argc, const char *argv[])
                                                 Sample::gaussian(1),
                                                 Sample::gaussian(1));
 
+        Vector2d z;
+        SE3 true_pose_se3;
 
-        problem.AddParameterBlock(states.point(i), 3);
-
-        bool inlier = true;
-        for (int j = 0; j < 15; ++j)
+        int num_obs = 0;
+        for (int j = 0; j < pose_num; ++j)
         {
-            SE3 true_pose_se3;
             true_pose_se3.setRotation(toQuaterniond(Vector3d(true_states.pose(j))));
             true_pose_se3.setTranslation(Vector3d(true_states.pose(j)+3));
             Vector3d point_cam = true_pose_se3.map(true_point_i);
-            Vector2d z = cam.cam_map(point_cam);
-
-
-            z += Vector2d(Sample::gaussian(PIXEL_NOISE),
-                          Sample::gaussian(PIXEL_NOISE));
-
-            ceres::CostFunction* costFunc = new ReprojectionErrorSE3XYZ(focal_length, cx, cy, z[0], z[1]);
-            problem.AddResidualBlock(costFunc, NULL, states.pose(j), states.point(i));
-
+            z = cam.cam_map(point_cam);
+            if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
+            {
+                ++num_obs;
+            }
         }
 
-        if (inlier)
+        if (num_obs >= 2)
         {
-            inliers.insert(point_id);
-            //Vector3d diff = v_p->estimate() - true_points[i];
-            Vector3d diff = noise_point_i - true_point_i;
+            problem.AddParameterBlock(states.point(i), 3);
 
-            sum_diff2 += diff.dot(diff);
+            bool inlier = true;
+            for (int j = 0; j < pose_num; ++j)
+            {
+                true_pose_se3.setRotation(toQuaterniond(Vector3d(true_states.pose(j))));
+                true_pose_se3.setTranslation(Vector3d(true_states.pose(j)+3));
+                Vector3d point_cam = true_pose_se3.map(true_point_i);
+                z = cam.cam_map(point_cam);
+
+                if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
+                {
+                    z += Vector2d(Sample::gaussian(PIXEL_NOISE),
+                                  Sample::gaussian(PIXEL_NOISE));
+
+                    ceres::CostFunction* costFunc = new ReprojectionErrorSE3XYZ(focal_length, cx, cy, z[0], z[1]);
+                    problem.AddResidualBlock(costFunc, NULL, states.pose(j), states.point(i));
+                }
+            }
+
+            if (inlier)
+            {
+                inliers.insert(point_id);
+                Vector3d diff = noise_point_i - true_point_i;
+
+                sum_diff2 += diff.dot(diff);
+            }
+            pointid_2_trueid.insert(make_pair(point_id, i));
+            ++point_id;
         }
-        pointid_2_trueid.insert(make_pair(point_id, i));
-        ++point_id;
-        ++point_num;
-
     }
     cout << endl;
     ceres::Solver::Options options;
-//    options.minimizer_type = ceres::TRUST_REGION;
     options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
-//    options.trust_region_strategy_type = ceres::DOGLEG;
     options.minimizer_progress_to_stdout = true;
-//    options.dogleg_type = ceres::SUBSPACE_DOGLEG;
-    options.max_num_iterations = 100;
+    options.max_num_iterations = 50;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.BriefReport() << "\n";
