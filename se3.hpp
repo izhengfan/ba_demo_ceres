@@ -3,8 +3,10 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include <ceres/rotation.h>
+//#include <ceres/rotation.h>
+#include <math.h>
 
+const double SMALL_EPS = 1e-10;
 
 typedef Eigen::Matrix<double, 6, 1, Eigen::ColMajor> Vector6d;
 typedef Eigen::Matrix<double, 7, 1, Eigen::ColMajor> Vector7d;
@@ -32,20 +34,83 @@ Eigen::Vector3d deltaR(const Eigen::Matrix3d& R)
 }
 
 
-Eigen::Vector3d toAngleAxis(const Eigen::Quaterniond& quaterd)
+Eigen::Vector3d toAngleAxis(const Eigen::Quaterniond& quaterd, double* angle=NULL)
 {
-    double q[4] = {quaterd.w(), quaterd.x(), quaterd.y(), quaterd.z() };
-    double a[3];
-    ceres::QuaternionToAngleAxis(q, a);
-    return Eigen::Vector3d(a);
+    //    double q[4] = {quaterd.w(), quaterd.x(), quaterd.y(), quaterd.z() };
+    //    double a[3];
+    //    ceres::QuaternionToAngleAxis(q, a);
+    //    return Eigen::Vector3d(a);
+
+    Eigen::Quaterniond unit_quaternion = quaterd.normalized();
+    double n = unit_quaternion.vec().norm();
+    double w = unit_quaternion.w();
+    double squared_w = w*w;
+
+    double two_atan_nbyw_by_n;
+    // Atan-based log thanks to
+    //
+    // C. Hertzberg et al.:
+    // "Integrating Generic Sensor Fusion Algorithms with Sound State
+    // Representation through Encapsulation of Manifolds"
+    // Information Fusion, 2011
+
+    if (n < SMALL_EPS)
+    {
+        // If quaternion is normalized and n=1, then w should be 1;
+        // w=0 should never happen here!
+        assert(fabs(w)>SMALL_EPS);
+
+        two_atan_nbyw_by_n = 2./w - 2.*(n*n)/(w*squared_w);
+    }
+    else
+    {
+        if (fabs(w)<SMALL_EPS)
+        {
+            if (w>0)
+            {
+                two_atan_nbyw_by_n = M_PI/n;
+            }
+            else
+            {
+                two_atan_nbyw_by_n = -M_PI/n;
+            }
+        }
+        two_atan_nbyw_by_n = 2*atan(n/w)/n;
+    }
+    if(angle!=NULL) *angle = two_atan_nbyw_by_n*n;
+    return two_atan_nbyw_by_n * unit_quaternion.vec();
 }
 
-Eigen::Quaterniond toQuaterniond(const Eigen::Vector3d& v3d)
+Eigen::Quaterniond toQuaterniond(const Eigen::Vector3d& v3d, double* angle = NULL)
 {
-    double q[4];
-    ceres::AngleAxisToQuaternion(v3d.data(), q);
-    return Eigen::Quaterniond(q[0], q[1], q[2], q[3]);
+    //    double q[4];
+    //    ceres::AngleAxisToQuaternion(v3d.data(), q);
+    //    return Eigen::Quaterniond(q[0], q[1], q[2], q[3]);
+    double theta = v3d.norm();
+    if(angle != NULL)
+        *angle = theta;
+    double half_theta = 0.5*theta;
+
+    double imag_factor;
+    double real_factor = cos(half_theta);
+    if(theta<SMALL_EPS)
+    {
+        double theta_sq = theta*theta;
+        double theta_po4 = theta_sq*theta_sq;
+        imag_factor = 0.5-0.0208333*theta_sq+0.000260417*theta_po4;
+    }
+    else
+    {
+        double sin_half_theta = sin(half_theta);
+        imag_factor = sin_half_theta/theta;
+    }
+
+    return Eigen::Quaterniond(real_factor,
+                              imag_factor*v3d.x(),
+                              imag_factor*v3d.y(),
+                              imag_factor*v3d.z());
 }
+
 
 class SE3 {
 public:
@@ -127,41 +192,25 @@ public:
 
     Vector6d log() const {
         Vector6d res;
-        Eigen::Matrix3d _R = _r.toRotationMatrix();
-        double d =  0.5*(_R(0,0)+_R(1,1)+_R(2,2)-1);
-        Eigen::Vector3d omega;
-        Eigen::Vector3d upsilon;
 
+        double theta;
+        res.head<3>() = toAngleAxis(_r, &theta);
 
-        Eigen::Vector3d dR = deltaR(_R);
+        Eigen::Matrix3d Omega = skew(res.head<3>());
         Eigen::Matrix3d V_inv;
-
-        if (d>0.99999)
+        if (theta<SMALL_EPS)
         {
-
-            omega=0.5*dR;
-            Eigen::Matrix3d Omega = skew(omega);
             V_inv = Eigen::Matrix3d::Identity()- 0.5*Omega + (1./12.)*(Omega*Omega);
         }
         else
         {
-            double theta = acos(d);
-            omega = theta/(2*sqrt(1-d*d))*dR;
-            Eigen::Matrix3d Omega = skew(omega);
             V_inv = ( Eigen::Matrix3d::Identity() - 0.5*Omega
                       + ( 1-theta/(2*tan(theta/2)))/(theta*theta)*(Omega*Omega) );
         }
 
-        upsilon = V_inv*_t;
-        for (int i=0; i<3;i++){
-            res[i]=omega[i];
-        }
-        for (int i=0; i<3;i++){
-            res[i+3]=upsilon[i];
-        }
+        res.tail<3>() = V_inv*_t;
 
         return res;
-
     }
 
     Eigen::Vector3d map(const Eigen::Vector3d & xyz) const
@@ -172,38 +221,27 @@ public:
 
     static SE3 exp(const Vector6d & update)
     {
-        Eigen::Vector3d omega;
-        for (int i=0; i<3; i++)
-            omega[i]=update[i];
-        Eigen::Vector3d upsilon;
-        for (int i=0; i<3; i++)
-            upsilon[i]=update[i+3];
+        Eigen::Vector3d omega(update.data());
+        Eigen::Vector3d upsilon(update.data()+3);
 
-        double theta = omega.norm();
+        double theta;
         Eigen::Matrix3d Omega = skew(omega);
 
-        Eigen::Matrix3d R;
+        Eigen::Quaterniond R = toQuaterniond(omega, &theta);
         Eigen::Matrix3d V;
-        if (theta<0.00001)
+        if (theta<SMALL_EPS)
         {
-            //TODO: CHECK WHETHER THIS IS CORRECT!!!
-            R = (Eigen::Matrix3d::Identity() + Omega + Omega*Omega);
-
-            V = R;
+            V = R.matrix();
         }
         else
         {
             Eigen::Matrix3d Omega2 = Omega*Omega;
 
-            R = (Eigen::Matrix3d::Identity()
-                 + sin(theta)/theta *Omega
-                 + (1-cos(theta))/(theta*theta)*Omega2);
-
             V = (Eigen::Matrix3d::Identity()
                  + (1-cos(theta))/(theta*theta)*Omega
                  + (theta-sin(theta))/(pow(theta,3))*Omega2);
         }
-        return SE3(Eigen::Quaterniond(R),V*upsilon);
+        return SE3(R, V*upsilon);
     }
 
     Eigen::Matrix<double, 6, 6, Eigen::ColMajor> adj() const
