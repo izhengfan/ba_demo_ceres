@@ -1,4 +1,5 @@
-#include "parametersse3quat.hpp"
+#include "parametersse3.hpp"
+#include <glog/logging.h>
 
 using namespace Eigen;
 using namespace std;
@@ -62,6 +63,8 @@ int main(int argc, const char *argv[])
         exit(0);
     }
 
+    google::InitGoogleLogging(argv[0]);
+
     double PIXEL_NOISE = atof(argv[1]);
     double OUTLIER_RATIO = 0.0;
 
@@ -95,11 +98,11 @@ int main(int argc, const char *argv[])
 
     ceres::Problem problem;
 
-    PosePointParametersBlock states(15, 500);
-    PosePointParametersBlock true_states(15, 500);
+    PosePointParametersBlock states(15, 50);
+    PosePointParametersBlock true_states(15, 50);
 
     //vector<Vector3d> true_points;
-    for (int i = 0; i < 500; ++i)
+    for (int i = 0; i < 50; ++i)
     {
         Eigen::Map<Vector3d> true_pt(true_states.point(i));
         true_pt = Vector3d((Sample::uniform() - 0.5) * 3,
@@ -119,14 +122,14 @@ int main(int argc, const char *argv[])
 
         Eigen::Quaterniond q;
         q.setIdentity();
-        Eigen::Map<Vector7d> true_pose(true_states.pose(i));
-        true_pose.head<4>() = Eigen::Vector4d(q.coeffs());
+        Eigen::Map<Vector6d> true_pose(true_states.pose(i));
+        true_pose.head<3>() = toAngleAxis(q);
         true_pose.tail<3>() = trans;
 
-        Eigen::Map<Vector7d> pose(states.pose(i));
+        Eigen::Map<Vector6d> pose(states.pose(i));
         pose = true_pose;
 
-        problem.AddParameterBlock(states.pose(i), 7, new PoseSE3Parameterization);
+        problem.AddParameterBlock(states.pose(i), 6, new PoseSE3Parameterization());
 
         if(i < 2)
         {
@@ -142,7 +145,7 @@ int main(int argc, const char *argv[])
     unordered_map<int, int> pointid_2_trueid;
     unordered_set<int> inliers;
 
-    for (int i = 0; i < 500; ++i)
+    for (int i = 0; i < 50; ++i)
     {
         Eigen::Map<Vector3d> true_point_i(true_states.point(i));
         Eigen::Map<Vector3d> noise_point_i(states.point(i));
@@ -150,65 +153,48 @@ int main(int argc, const char *argv[])
                                                 Sample::gaussian(1),
                                                 Sample::gaussian(1));
 
-        int num_obs = 0;
+
+        problem.AddParameterBlock(states.point(i), 3);
+
+        bool inlier = true;
         for (int j = 0; j < 15; ++j)
         {
-            //Vector2d z = cam_params->cam_map(true_poses.at(j).map(true_points.at(i)));
             SE3 true_pose_se3;
-            true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
+            true_pose_se3.setRotation(toQuaterniond(Vector3d(true_states.pose(j))));
+            true_pose_se3.setTranslation(Vector3d(true_states.pose(j)+3));
             Vector3d point_cam = true_pose_se3.map(true_point_i);
             Vector2d z = cam.cam_map(point_cam);
-            if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
-            {
-                ++num_obs;
-            }
+
+
+            z += Vector2d(Sample::gaussian(PIXEL_NOISE),
+                          Sample::gaussian(PIXEL_NOISE));
+
+            ceres::CostFunction* costFunc = new ReprojectionErrorSE3XYZ(focal_length, cx, cy, z[0], z[1]);
+            problem.AddResidualBlock(costFunc, NULL, states.pose(j), states.point(i));
+
         }
-        if (num_obs >= 2)
+
+        if (inlier)
         {
-            problem.AddParameterBlock(states.point(i), 3);
+            inliers.insert(point_id);
+            //Vector3d diff = v_p->estimate() - true_points[i];
+            Vector3d diff = noise_point_i - true_point_i;
 
-            bool inlier = true;
-            for (int j = 0; j < 15; ++j)
-            {
-                SE3 true_pose_se3;
-                true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
-                Vector3d point_cam = true_pose_se3.map(true_point_i);
-                Vector2d z = cam.cam_map(point_cam);
-
-                if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
-                {
-                    double sam = Sample::uniform();
-                    if (sam < OUTLIER_RATIO)
-                    {
-                        z = Vector2d(Sample::uniform(0, 640),
-                                     Sample::uniform(0, 480));
-                        inlier = false;
-                    }
-                    z += Vector2d(Sample::gaussian(PIXEL_NOISE),
-                                  Sample::gaussian(PIXEL_NOISE));
-
-                    ceres::CostFunction* costFunc = new ReprojectionErrorSE3XYZ(focal_length, cx, cy, z[0], z[1]);
-                    problem.AddResidualBlock(costFunc, NULL, states.pose(j), states.point(i));
-                }
-            }
-
-            if (inlier)
-            {
-                inliers.insert(point_id);
-                //Vector3d diff = v_p->estimate() - true_points[i];
-                Vector3d diff = noise_point_i - true_point_i;
-
-                sum_diff2 += diff.dot(diff);
-            }
-            pointid_2_trueid.insert(make_pair(point_id, i));
-            ++point_id;
-            ++point_num;
+            sum_diff2 += diff.dot(diff);
         }
+        pointid_2_trueid.insert(make_pair(point_id, i));
+        ++point_id;
+        ++point_num;
+
     }
     cout << endl;
     ceres::Solver::Options options;
+//    options.minimizer_type = ceres::TRUST_REGION;
     options.linear_solver_type = ceres::DENSE_NORMAL_CHOLESKY;
+//    options.trust_region_strategy_type = ceres::DOGLEG;
     options.minimizer_progress_to_stdout = true;
+//    options.dogleg_type = ceres::SUBSPACE_DOGLEG;
+    options.max_num_iterations = 100;
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     std::cout << summary.BriefReport() << "\n";

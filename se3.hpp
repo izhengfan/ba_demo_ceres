@@ -217,16 +217,6 @@ public:
         }
         _r.normalize();
     }
-
-    /**
-       * cast SE3 into an Isometry3D
-       */
-    operator Isometry3D() const
-    {
-        Isometry3D result = (Isometry3D) rotation();
-        result.translation() = translation();
-        return result;
-    }
 };
 
 #endif // SE3_HPP_
