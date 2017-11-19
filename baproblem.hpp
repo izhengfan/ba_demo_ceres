@@ -61,7 +61,7 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
 
         Eigen::Quaterniond q;
         q.setIdentity();
-        if(PoseBlockSize == 7)
+        if(Equal(PoseBlockSize, 7))
         {
             Eigen::Map<Vector7d> true_pose(true_states.pose(i));
             true_pose.head<4>() = Eigen::Vector4d(q.coeffs());
@@ -70,7 +70,7 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
             Eigen::Map<Vector7d> pose(states.pose(i));
             pose = true_pose;
         }
-        else if(PoseBlockSize == 6)
+        if(Equal(PoseBlockSize, 6))
         {
             Eigen::Map<Vector6d> true_pose(true_states.pose(i));
             true_pose.head<3>() = toAngleAxis(q);
@@ -103,9 +103,9 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
         int num_obs = 0;
         for (int j = 0; j < pose_num; ++j)
         {
-            if(PoseBlockSize == 7)
+            if(Equal(PoseBlockSize, 7))
                 true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
-            else if(PoseBlockSize == 6)
+            if(Equal(PoseBlockSize, 6))
             {
                 true_pose_se3.setRotation(toQuaterniond(Vector3d(true_states.pose(j))));
                 true_pose_se3.setTranslation(Vector3d(true_states.pose(j)+3));
@@ -125,9 +125,9 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
 
             for (int j = 0; j < pose_num; ++j)
             {
-                if(PoseBlockSize == 7)
+                if(Equal(PoseBlockSize, 7))
                     true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
-                else if(PoseBlockSize == 6)
+                if(Equal(PoseBlockSize, 6))
                 {
                     true_pose_se3.setRotation(toQuaterniond(Vector3d(true_states.pose(j))));
                     true_pose_se3.setTranslation(Vector3d(true_states.pose(j)+3));

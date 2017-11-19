@@ -12,6 +12,11 @@
 using namespace std;
 using namespace Eigen;
 
+constexpr bool Equal(const int a, const int b)
+{
+    return a == b;
+}
+
 class CameraParameters
 {
 protected:
@@ -61,9 +66,9 @@ template<int PoseBlockSize>
 bool ReprojectionErrorSE3XYZ<PoseBlockSize>::Evaluate(const double * const *parameters, double *residuals, double **jacobians) const
 {
     Quaterniond quaterd;
-    if(PoseBlockSize == 7)
+    if(Equal(PoseBlockSize, 7))
         quaterd = Eigen::Map<const Quaterniond>(parameters[0]);
-    else if(PoseBlockSize == 6)
+    if(Equal(PoseBlockSize, 6))
         quaterd = toQuaterniond(Eigen::Map<const Vector3d>(parameters[0]));
     Eigen::Map<const Eigen::Vector3d> trans(parameters[0] + (PoseBlockSize-3) );
     Eigen::Map<const Eigen::Vector3d> point(parameters[1]);
@@ -83,7 +88,7 @@ bool ReprojectionErrorSE3XYZ<PoseBlockSize>::Evaluate(const double * const *para
         if(jacobians[0] != NULL)
         {
             Eigen::Map<Eigen::Matrix<double, 2, PoseBlockSize, Eigen::RowMajor> > J_se3(jacobians[0]);
-            if(PoseBlockSize == 7)
+            if(Equal(PoseBlockSize, 7))
                 J_se3.template setZero();
             J_se3.template block<2,3>(0,0) = - J_cam * skew(p);
             J_se3.template block<2,3>(0,3) = J_cam;
@@ -118,7 +123,7 @@ bool PoseSE3Parameterization<PoseBlockSize>::Plus(const double *x, const double 
     Eigen::Map<const Eigen::Vector3d> trans(x + (PoseBlockSize - 3));
     SE3 se3_delta = SE3::exp(Eigen::Map<const Vector6d>(delta));
 
-    if(PoseBlockSize == 7)
+    if(Equal(PoseBlockSize, 7))
     {
         Eigen::Map<const Eigen::Quaterniond> quaterd(x);
         Eigen::Map<Eigen::Quaterniond> quaterd_plus(x_plus_delta);
@@ -127,7 +132,7 @@ bool PoseSE3Parameterization<PoseBlockSize>::Plus(const double *x, const double 
         quaterd_plus = se3_delta.rotation() * quaterd;
         trans_plus = se3_delta.rotation() * trans + se3_delta.translation();
     }
-    else if(PoseBlockSize == 6)
+    if(Equal(PoseBlockSize, 6))
     {
         Quaterniond quaterd_plus = se3_delta.rotation() * toQuaterniond(Eigen::Map<const Vector3d>(x));
         Eigen::Map<Vector3d> angles_plus(x_plus_delta);
@@ -144,7 +149,7 @@ template<int PoseBlockSize>
 bool PoseSE3Parameterization<PoseBlockSize>::ComputeJacobian(const double *x, double *jacobian) const
 {
     Eigen::Map<Eigen::Matrix<double, PoseBlockSize, 6, Eigen::RowMajor> > J(jacobian);
-    if(PoseBlockSize == 7)
+    if(Equal(PoseBlockSize, 7))
         J.setZero();
     J.template block<6,6>(0, 0).setIdentity();
     return true;
