@@ -3,7 +3,6 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-//#include <ceres/rotation.h>
 #include <math.h>
 
 const double SMALL_EPS = 1e-10;
@@ -11,7 +10,7 @@ const double SMALL_EPS = 1e-10;
 typedef Eigen::Matrix<double, 6, 1, Eigen::ColMajor> Vector6d;
 typedef Eigen::Matrix<double, 7, 1, Eigen::ColMajor> Vector7d;
 
-Eigen::Matrix3d skew(const Eigen::Vector3d&v)
+inline Eigen::Matrix3d skew(const Eigen::Vector3d&v)
 {
     Eigen::Matrix3d m;
     m.fill(0.);
@@ -24,7 +23,7 @@ Eigen::Matrix3d skew(const Eigen::Vector3d&v)
     return m;
 }
 
-Eigen::Vector3d deltaR(const Eigen::Matrix3d& R)
+inline Eigen::Vector3d deltaR(const Eigen::Matrix3d& R)
 {
     Eigen::Vector3d v;
     v(0)=R(2,1)-R(1,2);
@@ -34,13 +33,8 @@ Eigen::Vector3d deltaR(const Eigen::Matrix3d& R)
 }
 
 
-Eigen::Vector3d toAngleAxis(const Eigen::Quaterniond& quaterd, double* angle=NULL)
+inline Eigen::Vector3d toAngleAxis(const Eigen::Quaterniond& quaterd, double* angle=NULL)
 {
-    //    double q[4] = {quaterd.w(), quaterd.x(), quaterd.y(), quaterd.z() };
-    //    double a[3];
-    //    ceres::QuaternionToAngleAxis(q, a);
-    //    return Eigen::Vector3d(a);
-
     Eigen::Quaterniond unit_quaternion = quaterd.normalized();
     double n = unit_quaternion.vec().norm();
     double w = unit_quaternion.w();
@@ -81,11 +75,8 @@ Eigen::Vector3d toAngleAxis(const Eigen::Quaterniond& quaterd, double* angle=NUL
     return two_atan_nbyw_by_n * unit_quaternion.vec();
 }
 
-Eigen::Quaterniond toQuaterniond(const Eigen::Vector3d& v3d, double* angle = NULL)
+inline Eigen::Quaterniond toQuaterniond(const Eigen::Vector3d& v3d, double* angle = NULL)
 {
-    //    double q[4];
-    //    ceres::AngleAxisToQuaternion(v3d.data(), q);
-    //    return Eigen::Quaterniond(q[0], q[1], q[2], q[3]);
     double theta = v3d.norm();
     if(angle != NULL)
         *angle = theta;
