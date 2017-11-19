@@ -24,10 +24,10 @@ int main(int argc, const char *argv[])
 
     cout << "PIXEL_NOISE: " << PIXEL_NOISE << endl;
 
-    BAProblem<USE_POSE_SIZE> baProblem(15, 300, PIXEL_NOISE);
+    BAProblem<USE_POSE_SIZE> baProblem(15, 300, PIXEL_NOISE, true);
 
     ceres::Solver::Options options;
-    options.linear_solver_type = ceres::SPARSE_NORMAL_CHOLESKY;
+    options.linear_solver_type = ceres::SPARSE_SCHUR;
     options.minimizer_progress_to_stdout = true;
     options.max_num_iterations = 50;
     ceres::Solver::Summary summary;

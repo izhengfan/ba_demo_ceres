@@ -15,11 +15,12 @@ template <int PoseBlockSize>
 class BAProblem
 {
 public:
-    BAProblem(int pose_num_, int point_num_, double pix_noise_);
+    BAProblem(int pose_num_, int point_num_, double pix_noise_, bool useOrdering = false);
 
     void solve(ceres::Solver::Options opt, ceres::Solver::Summary* sum);
 
     ceres::Problem problem;
+    ceres::ParameterBlockOrdering* ordering = NULL;
 
 protected:
     PosePointParametersBlock<PoseBlockSize> states;
@@ -29,8 +30,10 @@ protected:
 
 
 template<int PoseBlockSize>
-BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_noise_)
+BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_noise_, bool useOrdering)
 {
+    if(useOrdering)
+        ordering = new ceres::ParameterBlockOrdering;
 
     int pose_num = 15;
     int point_num = 300;
@@ -117,6 +120,8 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
         if (num_obs >= 2)
         {
             problem.AddParameterBlock(states.point(i), 3);
+            if(useOrdering)
+                ordering->AddElementToGroup(states.point(i), 0);
 
             for (int j = 0; j < pose_num; ++j)
             {
@@ -143,12 +148,20 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
         }
     }
 
+    for (int i = 0; i < pose_num; ++i)
+    {
+        if(useOrdering)
+            ordering->AddElementToGroup(states.pose(i), 1);
+    }
+
 }
 
 
 template<int PoseBlockSize>
 void BAProblem<PoseBlockSize>::solve(ceres::Solver::Options opt, ceres::Solver::Summary *sum)
 {
+    if(ordering != NULL)
+        opt.linear_solver_ordering.reset(ordering);
     ceres::Solve(opt, &problem, sum);
 }
 
