@@ -17,7 +17,7 @@ class BAProblem
 public:
     BAProblem(int pose_num_, int point_num_, double pix_noise_, bool useOrdering = false);
 
-    void solve(ceres::Solver::Options opt, ceres::Solver::Summary* sum);
+    void solve(ceres::Solver::Options &opt, ceres::Solver::Summary* sum);
 
     ceres::Problem problem;
     ceres::ParameterBlockOrdering* ordering = NULL;
@@ -158,7 +158,7 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
 
 
 template<int PoseBlockSize>
-void BAProblem<PoseBlockSize>::solve(ceres::Solver::Options opt, ceres::Solver::Summary *sum)
+void BAProblem<PoseBlockSize>::solve(ceres::Solver::Options& opt, ceres::Solver::Summary *sum)
 {
     if(ordering != NULL)
         opt.linear_solver_ordering.reset(ordering);
