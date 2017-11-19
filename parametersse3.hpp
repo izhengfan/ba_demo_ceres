@@ -1,5 +1,5 @@
-#ifndef PARAMETERSSE3QUAT_HPP
-#define PARAMETERSSE3QUAT_HPP
+#ifndef PARAMETERSSE3_HPP
+#define PARAMETERSSE3_HPP
 
 #include <Eigen/StdVector>
 #include <Eigen/Geometry>
