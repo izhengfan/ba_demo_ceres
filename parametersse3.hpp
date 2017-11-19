@@ -178,4 +178,4 @@ public:
 };
 
 
-#endif // PARAMETERSSE3QUAT_HPP
+#endif // PARAMETERSSE3_HPP
