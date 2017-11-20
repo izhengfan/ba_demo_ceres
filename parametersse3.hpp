@@ -12,11 +12,6 @@
 using namespace std;
 using namespace Eigen;
 
-constexpr bool Equal(const int a, const int b)
-{
-    return a == b;
-}
-
 class CameraParameters
 {
 protected:
@@ -36,6 +31,9 @@ public:
     }
 };
 
+/// PoseBlockSize can only be
+/// 7 (quaternion + translation vector) or
+/// 6 (rotation vector + translation vector)
 template<int PoseBlockSize>
 class ReprojectionErrorSE3XYZ: public ceres::SizedCostFunction<2, PoseBlockSize, 3>
 {
@@ -62,47 +60,9 @@ private:
     double _observation_y;
 };
 
-template<int PoseBlockSize>
-bool ReprojectionErrorSE3XYZ<PoseBlockSize>::Evaluate(const double * const *parameters, double *residuals, double **jacobians) const
-{
-    Quaterniond quaterd;
-    if(Equal(PoseBlockSize, 7))
-        quaterd = Eigen::Map<const Quaterniond>(parameters[0]);
-    if(Equal(PoseBlockSize, 6))
-        quaterd = toQuaterniond(Eigen::Map<const Vector3d>(parameters[0]));
-    Eigen::Map<const Eigen::Vector3d> trans(parameters[0] + (PoseBlockSize-3) );
-    Eigen::Map<const Eigen::Vector3d> point(parameters[1]);
-
-    Eigen::Vector3d p = quaterd * point + trans;
-
-    residuals[0] = f * p[0] / p[2] + cx - _observation_x;
-    residuals[1] = f * p[1] / p[2] + cy - _observation_y;
-
-    Eigen::Matrix<double, 2, 3, Eigen::RowMajor> J_cam;
-    double f_by_z = f / p[2];
-    J_cam << f_by_z, 0, - f_by_z * p[0] / p[2],
-            0, f_by_z, - f_by_z * p[1] / p[2];
-
-    if(jacobians != NULL)
-    {
-        if(jacobians[0] != NULL)
-        {
-            Eigen::Map<Eigen::Matrix<double, 2, PoseBlockSize, Eigen::RowMajor> > J_se3(jacobians[0]);
-            if(Equal(PoseBlockSize, 7))
-                J_se3.template setZero();
-            J_se3.template block<2,3>(0,0) = - J_cam * skew(p);
-            J_se3.template block<2,3>(0,3) = J_cam;
-        }
-        if(jacobians[1] != NULL)
-        {
-            Eigen::Map<Eigen::Matrix<double, 2, 3, Eigen::RowMajor> > J_point(jacobians[1]);
-            J_point = J_cam * quaterd.toRotationMatrix();
-        }
-    }
-
-    return true;
-}
-
+/// PoseBlockSize can only be
+/// 7 (quaternion + translation vector) or
+/// 6 (rotation vector + translation vector)
 template<int PoseBlockSize>
 class PoseSE3Parameterization : public ceres::LocalParameterization {
 public:
@@ -117,44 +77,9 @@ public:
     virtual int LocalSize() const { return 6; }
 };
 
-template<int PoseBlockSize>
-bool PoseSE3Parameterization<PoseBlockSize>::Plus(const double *x, const double *delta, double *x_plus_delta) const
-{
-    Eigen::Map<const Eigen::Vector3d> trans(x + (PoseBlockSize - 3));
-    SE3 se3_delta = SE3::exp(Eigen::Map<const Vector6d>(delta));
-
-    if(Equal(PoseBlockSize, 7))
-    {
-        Eigen::Map<const Eigen::Quaterniond> quaterd(x);
-        Eigen::Map<Eigen::Quaterniond> quaterd_plus(x_plus_delta);
-        Eigen::Map<Eigen::Vector3d> trans_plus(x_plus_delta + (PoseBlockSize - 3));
-
-        quaterd_plus = se3_delta.rotation() * quaterd;
-        trans_plus = se3_delta.rotation() * trans + se3_delta.translation();
-    }
-    if(Equal(PoseBlockSize, 6))
-    {
-        Quaterniond quaterd_plus = se3_delta.rotation() * toQuaterniond(Eigen::Map<const Vector3d>(x));
-        Eigen::Map<Vector3d> angles_plus(x_plus_delta);
-        angles_plus = toAngleAxis(quaterd_plus);
-
-        Eigen::Map<Eigen::Vector3d> trans_plus(x_plus_delta + 3);
-        trans_plus = se3_delta.rotation() * trans + se3_delta.translation();
-    }
-
-    return true;
-}
-
-template<int PoseBlockSize>
-bool PoseSE3Parameterization<PoseBlockSize>::ComputeJacobian(const double *x, double *jacobian) const
-{
-    Eigen::Map<Eigen::Matrix<double, PoseBlockSize, 6, Eigen::RowMajor> > J(jacobian);
-    if(Equal(PoseBlockSize, 7))
-        J.setZero();
-    J.template block<6,6>(0, 0).setIdentity();
-    return true;
-}
-
+/// PoseBlockSize can only be
+/// 7 (quaternion + translation vector) or
+/// 6 (rotation vector + translation vector)
 template<int PoseBlockSize>
 class PosePointParametersBlock
 {
@@ -171,6 +96,10 @@ public:
         values = new double[pose_num * PoseBlockSize + point_num * 3];
     }
     ~PosePointParametersBlock() { delete[] values; }
+
+    void setPose(int idx, const Quaterniond &q, const Vector3d &trans);
+
+    void getPose(int idx, Quaterniond &q, Vector3d &trans);
 
     double* pose(int idx) {  return values + idx * PoseBlockSize; }
 

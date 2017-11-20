@@ -11,6 +11,9 @@ public:
     static double gaussian(double sigma);
 };
 
+/// PoseBlockSize can only be
+/// 7 (quaternion + translation vector) or
+/// 6 (rotation vector + translation vector)
 template <int PoseBlockSize>
 class BAProblem
 {
@@ -61,25 +64,8 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
 
         Eigen::Quaterniond q;
         q.setIdentity();
-        if(Equal(PoseBlockSize, 7))
-        {
-            Eigen::Map<Vector7d> true_pose(true_states.pose(i));
-            true_pose.head<4>() = Eigen::Vector4d(q.coeffs());
-            true_pose.tail<3>() = trans;
-
-            Eigen::Map<Vector7d> pose(states.pose(i));
-            pose = true_pose;
-        }
-        if(Equal(PoseBlockSize, 6))
-        {
-            Eigen::Map<Vector6d> true_pose(true_states.pose(i));
-            true_pose.head<3>() = toAngleAxis(q);
-            true_pose.tail<3>() = trans;
-
-            Eigen::Map<Vector6d> pose(states.pose(i));
-            pose = true_pose;
-        }
-
+        true_states.setPose(i, q, trans);
+        states.setPose(i, q, trans);
 
         problem.AddParameterBlock(states.pose(i), PoseBlockSize, new PoseSE3Parameterization<PoseBlockSize>());
 
@@ -103,13 +89,7 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
         int num_obs = 0;
         for (int j = 0; j < pose_num; ++j)
         {
-            if(Equal(PoseBlockSize, 7))
-                true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
-            if(Equal(PoseBlockSize, 6))
-            {
-                true_pose_se3.setRotation(toQuaterniond(Vector3d(true_states.pose(j))));
-                true_pose_se3.setTranslation(Vector3d(true_states.pose(j)+3));
-            }
+            true_states.getPose(j, true_pose_se3.rotation(), true_pose_se3.translation());
             Vector3d point_cam = true_pose_se3.map(true_point_i);
             z = cam.cam_map(point_cam);
             if (z[0] >= 0 && z[1] >= 0 && z[0] < 640 && z[1] < 480)
@@ -125,13 +105,7 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
 
             for (int j = 0; j < pose_num; ++j)
             {
-                if(Equal(PoseBlockSize, 7))
-                    true_pose_se3.fromVector(Eigen::Map<Vector7d>(true_states.pose(j)));
-                if(Equal(PoseBlockSize, 6))
-                {
-                    true_pose_se3.setRotation(toQuaterniond(Vector3d(true_states.pose(j))));
-                    true_pose_se3.setTranslation(Vector3d(true_states.pose(j)+3));
-                }
+                true_states.getPose(j, true_pose_se3.rotation(), true_pose_se3.translation());
                 Vector3d point_cam = true_pose_se3.map(true_point_i);
                 z = cam.cam_map(point_cam);
 
@@ -148,11 +122,11 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
         }
     }
 
-    for (int i = 0; i < pose_num; ++i)
-    {
-        if(useOrdering)
+    if(useOrdering)
+        for (int i = 0; i < pose_num; ++i)
+        {
             ordering->AddElementToGroup(states.pose(i), 1);
-    }
+        }
 
 }
 
@@ -164,7 +138,5 @@ void BAProblem<PoseBlockSize>::solve(ceres::Solver::Options& opt, ceres::Solver:
         opt.linear_solver_ordering.reset(ordering);
     ceres::Solve(opt, &problem, sum);
 }
-
-
 
 #endif

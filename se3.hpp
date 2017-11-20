@@ -128,9 +128,13 @@ public:
 
     inline const Eigen::Vector3d& translation() const {return _t;}
 
+    inline Eigen::Vector3d& translation() {return _t;}
+
     inline void setTranslation(const Eigen::Vector3d& t_) {_t = t_;}
 
     inline const Eigen::Quaterniond& rotation() const {return _r;}
+
+    inline Eigen::Quaterniond& rotation() {return _r;}
 
     void setRotation(const Eigen::Quaterniond& r_) {_r=r_;}
 
