@@ -38,8 +38,8 @@ BAProblem<PoseBlockSize>::BAProblem(int pose_num_, int point_num_, double pix_no
     if(useOrdering)
         ordering = new ceres::ParameterBlockOrdering;
 
-    int pose_num = 15;
-    int point_num = 300;
+    int pose_num = pose_num_;
+    int point_num = point_num_;
     double PIXEL_NOISE = pix_noise_;
 
     states.create(pose_num, point_num);
