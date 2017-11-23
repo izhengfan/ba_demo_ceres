@@ -9,13 +9,15 @@ bool ReprojectionErrorSE3XYZ<7>::Evaluate(const double * const *parameters, doub
 
     Eigen::Vector3d p = quaterd * point + trans;
 
-    residuals[0] = f * p[0] / p[2] + cx - _observation_x;
-    residuals[1] = f * p[1] / p[2] + cy - _observation_y;
+    double f_by_z = f / p[2];
+    residuals[0] = f_by_z * p[0] + cx - _observation_x;
+    residuals[1] = f_by_z * p[1] + cy - _observation_y;
 
     Eigen::Matrix<double, 2, 3, Eigen::RowMajor> J_cam;
-    double f_by_z = f / p[2];
-    J_cam << f_by_z, 0, - f_by_z * p[0] / p[2],
-            0, f_by_z, - f_by_z * p[1] / p[2];
+    double f_by_zz = f_by_z / p[2];
+    J_cam << f_by_z, 0, - f_by_zz * p[0],
+            0, f_by_z, - f_by_zz * p[1];
+
 
     if(jacobians != NULL)
     {
@@ -45,13 +47,14 @@ bool ReprojectionErrorSE3XYZ<6>::Evaluate(const double * const *parameters, doub
 
     Eigen::Vector3d p = quaterd * point + trans;
 
-    residuals[0] = f * p[0] / p[2] + cx - _observation_x;
-    residuals[1] = f * p[1] / p[2] + cy - _observation_y;
+    double f_by_z = f / p[2];
+    residuals[0] = f_by_z * p[0] + cx - _observation_x;
+    residuals[1] = f_by_z * p[1] + cy - _observation_y;
 
     Eigen::Matrix<double, 2, 3, Eigen::RowMajor> J_cam;
-    double f_by_z = f / p[2];
-    J_cam << f_by_z, 0, - f_by_z * p[0] / p[2],
-            0, f_by_z, - f_by_z * p[1] / p[2];
+    double f_by_zz = f_by_z / p[2];
+    J_cam << f_by_z, 0, - f_by_zz * p[0],
+            0, f_by_z, - f_by_zz * p[1];
 
     if(jacobians != NULL)
     {
@@ -93,7 +96,7 @@ bool PoseSE3Parameterization<7>::ComputeJacobian(const double *x, double *jacobi
 {
     Eigen::Map<Eigen::Matrix<double, 7, 6, Eigen::RowMajor> > J(jacobian);
     J.setZero();
-    J.template block<6,6>(0, 0).setIdentity();
+    J.block<6,6>(0, 0).setIdentity();
     return true;
 }
 
