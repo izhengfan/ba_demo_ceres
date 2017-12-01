@@ -3,6 +3,9 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
+#ifdef _MSC_VER
+#define _USE_MATH_DEFINES
+#endif
 #include <math.h>
 
 const double SMALL_EPS = 1e-10;
