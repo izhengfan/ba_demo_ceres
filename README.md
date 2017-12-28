@@ -23,7 +23,7 @@ Please check `parametersse3.hpp` `parametersse3.cpp` for the local parameterizat
 
 For convenience in expression, we denote the Jacobian matrix of the error function w.r.t. the Lie group by `J_err_grp`, the Jacobian matrix of the Lie group w.r.t. the local Lie algebra increment by `J_grp_alg`, and the Jacobian matrix of the error function w.r.t. the local Lie algebra increment by `J_err_alg`.
 
-In many on-manifold graph optimization problems, only the `J_err_alg` are required.  However, in Ceres Solver, one can only seperately assign `J_err_grp` and `J_grp_alg`, but cannot directly define `J_err_alg`. This may be redundant and cost extra computational resources:
+In many on-manifold graph optimization problems, only `J_err_alg` are required.  However, in Ceres Solver, one can only seperately assign `J_err_grp` and `J_grp_alg`, but cannot directly define `J_err_alg`. This may be redundant and cost extra computational resources:
 
   - One has to derive the explicit Jacobians equations of both `J_err_grp` and `J_grp_alg`.
   - The solver would spend extra time to compute `J_err_alg` by multiplying `J_err_grp` and `J_grp_alg`.
@@ -33,3 +33,8 @@ Therefore, for convenience, we use a not-that-elegant but effective trick. Let's
 ### Other tips
 
 One advice for self-defined Jacobians: do not access jacobians[0] and jacobians[1] in the meantime, which may cause seg-fault.
+
+
+### License 
+
+[BSD New](LICENSE)
