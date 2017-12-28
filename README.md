@@ -21,12 +21,14 @@ Please check `parametersse3.hpp` `parametersse3.cpp` for the local parameterizat
 
 ### Jacobians
 
-Please note that in many on-manifold graph optimization problems, only the Jacobians of error functions w.r.t. local Lie algebras are required.  However, in Ceres Solver, one can only seperately define the Jacobians of error functions w.r.t. the Lie group paramerization, and the Jacobians of Lie groups w.r.t. to the local Lie algebras, rather than directly define the Jacobians of the error functions w.r.t. the local Lie algebra. This may be redundant and cost extra computational resources:
+For convenience in expression, we denote the Jacobian matrix of the error function w.r.t. the Lie group by `J_err_grp`, the Jacobian matrix of the Lie group w.r.t. the local Lie algebra increment by `J_grp_alg`, and the Jacobian matrix of the error function w.r.t. the local Lie algebra increment by `J_err_alg`.
 
-  - One have to derive the explicit Jacobians equations of both `error function w.r.t. Lie group` and `Lie group w.r.t. Lie algebra`.
-  - The solver would spend extra time to compute `error functino w.r.t. Lie algebra` Jacobian by multiplying the two Jacobians defined above.
+In many on-manifold graph optimization problems, only the `J_err_alg` are required.  However, in Ceres Solver, one can only seperately assign `J_err_grp` and `J_grp_alg`, but cannot directly define `J_err_alg`. This may be redundant and cost extra computational resources:
 
-Therefore, for convenience, we use a not-that-elegant but effective trick. Let's say that the error function term is of dimension `m`, the Lie group `N`, and the Lie algebra `n`. We define the first `m*n` block in  `error function w.r.t Lie group` Jacobian to be the actual `error function w.r.t. Lie algebra` Jacobian, with other elements to be zero; and define the first `n*n` block in `Lie group w.r.t. Lie algebra` Jacobian to be identity matrix, with other elements to be zero. Thus, we are free of deriving the two extra Jacobians, and reduce computational burden of the solver -- although Ceres still has to multiply the two Jacobians, the overall computational process gets simpler.
+  - One has to derive the explicit Jacobians equations of both `J_err_grp` and `J_grp_alg`.
+  - The solver would spend extra time to compute `J_err_alg` by multiplying `J_err_grp` and `J_grp_alg`.
+
+Therefore, for convenience, we use a not-that-elegant but effective trick. Let's say that the error function term is of dimension `m`, the Lie group `N`, and the Lie algebra `n`. We define the leading `m*n` block in  `J_err_grp` to be the actual `J_err_alg`, with other elements to be zero; and define the leading `n*n` block in `J_grp_alg` to be identity matrix, with other elements to be zero. Thus, we are free of deriving the two extra Jacobians, and the computational burden of the solver is reduced -- although Ceres still has to multiply the two Jacobians, the overall computational process gets simpler.
  
 ### Other tips
 
