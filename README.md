@@ -26,7 +26,7 @@ For convenience in expression, we denote the Jacobian matrix of the error functi
 In many on-manifold graph optimization problems, only `J_err_alg` are required.  However, in Ceres Solver, one can only seperately assign `J_err_grp` and `J_grp_alg`, but cannot directly define `J_err_alg`. This may be redundant and cost extra computational resources:
 
   - One has to derive the explicit Jacobians equations of both `J_err_grp` and `J_grp_alg`.
-  - The solver would spend extra time to compute `J_err_alg` by multiplying `J_err_grp` and `J_grp_alg`.
+  - The solver may spend extra time in computing `J_err_grp` and `J_grp_alg`, and multiplying `J_err_grp` and `J_grp_alg` to get `J_err_alg`.
 
 Therefore, for convenience, we use a not-that-elegant but effective trick. Let's say that the error function term is of dimension `m`, the Lie group `N`, and the Lie algebra `n`. We define the leading `m*n` block in  `J_err_grp` to be the actual `J_err_alg`, with other elements to be zero; and define the leading `n*n` block in `J_grp_alg` to be identity matrix, with other elements to be zero. Thus, we are free of deriving the two extra Jacobians, and the computational burden of the solver is reduced -- although Ceres still has to multiply the two Jacobians, the overall computational process gets simpler.
  
