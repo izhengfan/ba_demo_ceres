@@ -2,6 +2,8 @@
 
 Bundle adjustment demo using Ceres Solver
 
+Also read a [blog post](http://fzheng.me/2018/01/23/ba-demo-ceres/).
+
 ### Dependencies
 
 - Ceres Solver
