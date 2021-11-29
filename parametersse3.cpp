@@ -126,7 +126,7 @@ bool PoseSE3Parameterization<6>::ComputeJacobian(const double *x, double *jacobi
     double R[9];
     ceres::AngleAxisToRotationMatrix(x, R);
     Eigen::Matrix<double, 3, 3, Eigen::RowMajor> R_cam(R);
-    J.block<3, 3>(0, 0) = R_cam;
+    J.block<3, 3>(0, 0) = -R_cam;
 
     
     return true;
